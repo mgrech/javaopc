@@ -1,2 +1,2 @@
 # javaopc
-Source-to-source compiler to support overator overloading in Java
+Source-to-source compiler to support operator overloading in Java
