@@ -1,0 +1,4 @@
+MyInt(3)
+MyInt(1)b
+aMyInt(2)
+ab

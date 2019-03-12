@@ -1,0 +1,12 @@
+import com.github.mgrech.javaopc.test.MyInt;
+
+public class Program
+{
+	public static void main(String[] args)
+	{
+		var a = new MyInt(1);
+		var b = new MyInt(2);
+		var c = new MyInt(3);
+		System.out.println((a + b) + c);
+	}
+}
