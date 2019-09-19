@@ -13,7 +13,7 @@ public class JavaOperatorCompiler
 {
 	private static CompilationUnit parse(Provider input, SymbolResolver resolver)
 	{
-		var config = new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_11)
+		var config = new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_12)
 		                                      .setSymbolResolver(resolver);
 
 		var parser = new JavaParser(config);
