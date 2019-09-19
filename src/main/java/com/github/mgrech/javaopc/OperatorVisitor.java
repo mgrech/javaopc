@@ -2,12 +2,15 @@ package com.github.mgrech.javaopc;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.BinaryExpr;
-import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.visitor.TreeVisitor;
 import com.github.javaparser.resolution.SymbolResolver;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.types.ResolvedType;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 public class OperatorVisitor extends TreeVisitor
 {
@@ -16,31 +19,6 @@ public class OperatorVisitor extends TreeVisitor
 	private static boolean isJavaLangString(ResolvedType type)
 	{
 		return type.isReferenceType() && type.asReferenceType().getQualifiedName().equals(JAVA_LANG_STRING);
-	}
-
-	private static String operatorToMethodName(BinaryExpr.Operator operator)
-	{
-		switch(operator)
-		{
-		// arithmetic operators
-		case PLUS:      return "opAdd";
-		case MINUS:     return "opSubtract";
-		case MULTIPLY:  return "opMultiply";
-		case DIVIDE:    return "opDivide";
-		case REMAINDER: return "opRemainder";
-
-		// bitwise operators
-		case BINARY_AND:           return "opAnd";
-		case BINARY_OR:            return "opOr";
-		case XOR:                  return "opXor";
-		case LEFT_SHIFT:           return "opShiftLeft";
-		case SIGNED_RIGHT_SHIFT:   return "opShiftRightSigned";
-		case UNSIGNED_RIGHT_SHIFT: return "opShiftRightUnsigned";
-
-		default: break;
-		}
-
-		throw new AssertionError("unreachable");
 	}
 
 	private final SymbolResolver resolver;
@@ -60,19 +38,126 @@ public class OperatorVisitor extends TreeVisitor
 		expr.replace(new AssignExpr(tokenRange, expr.getTarget(), binaryExpr, AssignExpr.Operator.ASSIGN));
 	}
 
-	private void visit(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
+	private static boolean isValidInvocation(Expression location, MethodCallExpr invocation)
 	{
-		if(expr.getOperator() == BinaryExpr.Operator.LESS
-		|| expr.getOperator() == BinaryExpr.Operator.LESS_EQUALS
-		|| expr.getOperator() == BinaryExpr.Operator.GREATER
-		|| expr.getOperator() == BinaryExpr.Operator.GREATER_EQUALS)
+		// insert for lookup (requires scope)
+		location.replace(invocation);
+
+		try
 		{
+			// lookup method
+			invocation.resolve();
+			return true;
+		}
+		catch(UnsolvedSymbolException ex)
+		{
+			return false;
+		}
+		finally
+		{
+			// undo insertion
+			invocation.replace(location);
+		}
+	}
+
+	private MethodCallExpr resolveOperatorInvocation(Expression expr, String opMethodName, List<Expression> args, List<ResolvedType> argTypes)
+	{
+		var typesDeduplicated = new HashSet<>(argTypes);
+		var candidates = new ArrayList<MethodCallExpr>();
+
+		for(var type : typesDeduplicated)
+		{
+			if(!type.isReferenceType())
+				continue;
+
+			var className = new NameExpr(type.asReferenceType().getTypeDeclaration().getName());
+			var invocation = new MethodCallExpr(className, opMethodName, NodeList.nodeList(args));
+
+			if(isValidInvocation(expr, invocation))
+				candidates.add(invocation);
+		}
+
+		var unqualified = new MethodCallExpr(opMethodName, args.toArray(new Expression[0]));
+
+		if(isValidInvocation(expr, unqualified))
+			candidates.add(unqualified);
+
+		switch(candidates.size())
+		{
+		case 0: return null;
+		case 1: return candidates.get(0);
+		default: break;
+		}
+
+		return CompileErrors.ambiguousMethodCall();
+	}
+
+	private void visit(UnaryExpr expr, ResolvedType argType)
+	{
+		switch(expr.getOperator())
+		{
+		case LOGICAL_COMPLEMENT:
+			break;
+
+		case PLUS:
+		case MINUS:
+		case BITWISE_COMPLEMENT:
+			var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+			var args = List.of(expr.getExpression());
+			var argTypes = List.of(argType);
+			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
+
+			if(invocation == null)
+				CompileErrors.noApplicableMethodFound();
+
+			expr.replace(invocation);
+			break;
+
+		case PREFIX_INCREMENT:
+		case PREFIX_DECREMENT:
+		case POSTFIX_INCREMENT:
+		case POSTFIX_DECREMENT:
 			throw new AssertionError("nyi");
 		}
-		else // rewrite 'a @ b' to 'a.opName(b)'
+	}
+
+	private void visit(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
+	{
+		switch(expr.getOperator())
 		{
-			var methodName = operatorToMethodName(expr.getOperator());
-			expr.replace(new MethodCallExpr(expr.getLeft(), methodName, NodeList.nodeList(expr.getRight())));
+		case AND:
+		case OR:
+		case EQUALS:
+		case NOT_EQUALS:
+			break;
+
+		case LESS:
+		case LESS_EQUALS:
+		case GREATER:
+		case GREATER_EQUALS:
+			throw new AssertionError("nyi");
+
+		case PLUS:
+		case MINUS:
+		case MULTIPLY:
+		case DIVIDE:
+		case REMAINDER:
+		case BINARY_AND:
+		case BINARY_OR:
+		case XOR:
+		case LEFT_SHIFT:
+		case SIGNED_RIGHT_SHIFT:
+		case UNSIGNED_RIGHT_SHIFT:
+			var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+			var args = List.of(expr.getLeft(), expr.getRight());
+			var argTypes = List.of(leftType, rightType);
+			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
+
+			if(invocation == null)
+				CompileErrors.noApplicableMethodFound();
+
+			expr.replace(invocation);
+			break;
 		}
 	}
 
@@ -85,9 +170,17 @@ public class OperatorVisitor extends TreeVisitor
 			var leftType = resolver.calculateType(opnode.getTarget());
 			var rightType = resolver.calculateType(opnode.getValue());
 
-			// we're interested in all compound assignment operators
+			// we're interested compound assignment operators only, not simple assignment
 			if(opnode.getOperator() != AssignExpr.Operator.ASSIGN)
 				visit(opnode, leftType, rightType);
+		}
+		else if(node instanceof UnaryExpr)
+		{
+			var opnode = (UnaryExpr)node;
+			var argType = resolver.calculateType(opnode.getExpression());
+
+			if(!argType.isPrimitive())
+				visit(opnode, argType);
 		}
 		else if(node instanceof BinaryExpr)
 		{
@@ -96,10 +189,9 @@ public class OperatorVisitor extends TreeVisitor
 			var rightType = resolver.calculateType(opnode.getRight());
 
 			// we're interested in all binary expressions where:
-			// 1. at least one argument is a reference type, and
-			// 2. if the operator is '+', neither of the arguments are a String
-			// (otherwise '+' represents string concat)
-			if(leftType.isReferenceType() || rightType.isReferenceType())
+			// 1. at least one argument is a non-primitive type, and
+			// 2. if the operator is '+', neither of the arguments are a String (otherwise we have a string concat)
+			if(!leftType.isPrimitive() || !rightType.isPrimitive())
 			{
 				if(opnode.getOperator() == BinaryExpr.Operator.PLUS)
 				{

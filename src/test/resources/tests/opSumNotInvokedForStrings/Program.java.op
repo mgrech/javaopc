@@ -1,11 +1,11 @@
-import com.github.mgrech.javaopc.test.MyInt;
+import com.github.mgrech.javaopc.test.BigInteger2;
 
 public class Program
 {
 	public static void main(String[] args)
 	{
-		var a = new MyInt(1);
-		var b = new MyInt(2);
+		var a = new BigInteger2(1);
+		var b = new BigInteger2(2);
 		System.out.println(a + b);
 		System.out.println(a + "b");
 		System.out.println("a" + b);
