@@ -11,6 +11,12 @@ public class Tests
 	}
 
 	@Test
+	public void invocationOperatorForFunctionalInterfaceCompiles()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void lookupFindsOverloadsInArgumentClass()
 	{
 		Driver.runTest();

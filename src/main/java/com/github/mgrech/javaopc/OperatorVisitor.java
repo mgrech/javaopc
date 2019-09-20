@@ -5,48 +5,15 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.visitor.TreeVisitor;
 import com.github.javaparser.resolution.SymbolResolver;
-import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.types.ResolvedType;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class OperatorVisitor extends TreeVisitor
 {
-	private static final String JAVA_LANG_STRING = "java.lang.String";
-
-	private static boolean isJavaLangString(ResolvedType type)
-	{
-		return type.isReferenceType() && type.asReferenceType().getQualifiedName().equals(JAVA_LANG_STRING);
-	}
-
-	private static boolean isBuiltinType(ResolvedType type)
-	{
-		if(type.isPrimitive() || type.isArray())
-			return true;
-
-		if(!type.isReferenceType())
-			return false;
-
-		var decl = type.asReferenceType().getTypeDeclaration();
-
-		if(!decl.getPackageName().equals("java.lang"))
-			return false;
-
-		var name = decl.getName();
-
-		return name.equals("Boolean")
-		    || name.equals("Byte")
-		    || name.equals("Character")
-		    || name.equals("Double")
-		    || name.equals("Float")
-		    || name.equals("Integer")
-		    || name.equals("Long")
-		    || name.equals("Short")
-		    || name.equals("String");
-	}
-
 	private final SymbolResolver resolver;
 
 	public OperatorVisitor(SymbolResolver resolver)
@@ -67,26 +34,49 @@ public class OperatorVisitor extends TreeVisitor
 			assignExpr.replace(expr);
 	}
 
+	private static ResolvedType typeof(Expression location, Expression expr)
+	{
+		location.replace(expr);
+
+		try
+		{
+			return expr.calculateResolvedType();
+		}
+		catch(RuntimeException ex)
+		{
+			return null;
+		}
+		finally
+		{
+			expr.replace(location);
+		}
+	}
+
+	private static boolean isValidInvocation(MethodCallExpr invocation)
+	{
+		try
+		{
+			invocation.resolve();
+			return true;
+		}
+		catch(RuntimeException ex)
+		{
+			return false;
+		}
+	}
+
 	private static boolean isValidInvocation(Expression location, MethodCallExpr invocation)
 	{
 		// insert for lookup (requires scope)
 		location.replace(invocation);
 
-		try
-		{
-			// lookup method
-			invocation.resolve();
-			return true;
-		}
-		catch(UnsolvedSymbolException ex)
-		{
-			return false;
-		}
-		finally
-		{
-			// undo insertion
-			invocation.replace(location);
-		}
+		// lookup method
+		var valid = isValidInvocation(invocation);
+
+		// undo insertion
+		invocation.replace(location);
+
+		return valid;
 	}
 
 	private MethodCallExpr resolveOperatorInvocation(Expression expr, String opMethodName, List<Expression> args, List<ResolvedType> argTypes)
@@ -190,6 +180,33 @@ public class OperatorVisitor extends TreeVisitor
 		}
 	}
 
+	private void visit(MethodCallExpr expr)
+	{
+		var nameExpr = new NameExpr(expr.getName());
+		var type = typeof(expr, nameExpr);
+
+		if(type == null)
+			return;
+
+		if(Types.isFunctionalInterface(type))
+		{
+			var methods = type.asReferenceType().getTypeDeclaration().getDeclaredMethods();
+			var abstractMethods = methods.stream()
+			                    .filter(m -> m.isAbstract())
+			                    .collect(Collectors.toList());
+
+			assert abstractMethods.size() == 1;
+
+			var method = abstractMethods.get(0);
+			var invocation = new MethodCallExpr(nameExpr, method.getName(), expr.getArguments());
+			expr.replace(invocation);
+		}
+		else
+		{
+			throw new RuntimeException("nyi");
+		}
+	}
+
 	@Override
 	public void process(Node node)
 	{
@@ -218,16 +235,23 @@ public class OperatorVisitor extends TreeVisitor
 			// we're interested in all binary expressions where:
 			// 1. at least one argument is a user-defined type, and
 			// 2. if the operator is '+', neither of the arguments are a String (otherwise we have a string concat)
-			if(!isBuiltinType(leftType) || !isBuiltinType(rightType))
+			if(!Types.isBuiltinType(leftType) || !Types.isBuiltinType(rightType))
 			{
 				if(opnode.getOperator() == BinaryExpr.Operator.PLUS)
 				{
-					if(!isJavaLangString(leftType) && !isJavaLangString(rightType))
+					if(!Types.isJavaLangString(leftType) && !Types.isJavaLangString(rightType))
 						visit(opnode, leftType, rightType);
 				}
 				else
 					visit(opnode, leftType, rightType);
 			}
+		}
+		else if(node instanceof MethodCallExpr)
+		{
+			var opnode = (MethodCallExpr)node;
+
+			if(!isValidInvocation(opnode))
+				visit(opnode);
 		}
 	}
 }
