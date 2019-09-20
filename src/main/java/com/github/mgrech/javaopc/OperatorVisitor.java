@@ -28,14 +28,17 @@ public class OperatorVisitor extends TreeVisitor
 		this.resolver = resolver;
 	}
 
-	// rewrite 'a @= b' to 'a = (a @ b)'
-	private void visit(AssignExpr expr, ResolvedType leftType, ResolvedType rightType)
+	private void rewriteCompoundAssignment(AssignExpr expr)
 	{
-		var tokenRange = expr.getTokenRange().get();
 		var binaryOp = expr.getOperator().toBinaryOperator().get();
-		var binaryExpr = new BinaryExpr(tokenRange, expr.getTarget(), expr.getValue(), binaryOp);
-		visit(binaryExpr, leftType, rightType);
-		expr.replace(new AssignExpr(tokenRange, expr.getTarget(), binaryExpr, AssignExpr.Operator.ASSIGN));
+		var binaryExpr = new BinaryExpr(expr.getTarget(), expr.getValue(), binaryOp);
+		var assignExpr = new AssignExpr(expr.getTarget(), binaryExpr, AssignExpr.Operator.ASSIGN);
+		expr.replace(assignExpr);
+		process(binaryExpr);
+
+		// undo rewriting if this was not an overloaded operator for cleaner code output
+		if(assignExpr.getValue() == binaryExpr)
+			assignExpr.replace(expr);
 	}
 
 	private static boolean isValidInvocation(Expression location, MethodCallExpr invocation)
@@ -167,12 +170,10 @@ public class OperatorVisitor extends TreeVisitor
 		if(node instanceof AssignExpr)
 		{
 			var opnode = (AssignExpr)node;
-			var leftType = resolver.calculateType(opnode.getTarget());
-			var rightType = resolver.calculateType(opnode.getValue());
 
 			// we're interested compound assignment operators only, not simple assignment
 			if(opnode.getOperator() != AssignExpr.Operator.ASSIGN)
-				visit(opnode, leftType, rightType);
+				rewriteCompoundAssignment(opnode);
 		}
 		else if(node instanceof UnaryExpr)
 		{

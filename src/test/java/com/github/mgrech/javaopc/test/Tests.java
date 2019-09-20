@@ -5,6 +5,12 @@ import org.junit.Test;
 public class Tests
 {
 	@Test
+	public void builtinOperatorsAreUnaffected()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void lookupFindsOverloadsInArgumentClass()
 	{
 		Driver.runTest();
@@ -35,7 +41,7 @@ public class Tests
 	}
 
 	@Test
-	public void simpleCompoundAssignmentCompiles()
+	public void simpleCompoundAssignmentRewritingCompiles()
 	{
 		Driver.runTest();
 	}
