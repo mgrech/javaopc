@@ -12,8 +12,6 @@ import java.nio.charset.StandardCharsets;
 
 public class Driver
 {
-	private static final InMemoryJavaCompiler COMPILER = InMemoryJavaCompiler.newInstance();
-
 	private static void runTest(String relativePath) throws Exception
 	{
 		var input = Driver.class.getResourceAsStream(String.format("/tests/%s/Program.java.op", relativePath));
@@ -28,7 +26,8 @@ public class Driver
 		var className = String.format("%s.Program", packageName);
 		compilationUnit.setPackageDeclaration(packageName);
 
-		var program = COMPILER.compile(className, compilationUnit.toString());
+		var compiler = InMemoryJavaCompiler.newInstance();
+		var program = compiler.compile(className, compilationUnit.toString());
 		var main = program.getDeclaredMethod("main", String[].class);
 
 		var oldOut = System.out;
