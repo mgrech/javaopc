@@ -21,6 +21,32 @@ public class OperatorVisitor extends TreeVisitor
 		return type.isReferenceType() && type.asReferenceType().getQualifiedName().equals(JAVA_LANG_STRING);
 	}
 
+	private static boolean isBuiltinType(ResolvedType type)
+	{
+		if(type.isPrimitive() || type.isArray())
+			return true;
+
+		if(!type.isReferenceType())
+			return false;
+
+		var decl = type.asReferenceType().getTypeDeclaration();
+
+		if(!decl.getPackageName().equals("java.lang"))
+			return false;
+
+		var name = decl.getName();
+
+		return name.equals("Boolean")
+		    || name.equals("Byte")
+		    || name.equals("Character")
+		    || name.equals("Double")
+		    || name.equals("Float")
+		    || name.equals("Integer")
+		    || name.equals("Long")
+		    || name.equals("Short")
+		    || name.equals("String");
+	}
+
 	private final SymbolResolver resolver;
 
 	public OperatorVisitor(SymbolResolver resolver)
@@ -190,9 +216,9 @@ public class OperatorVisitor extends TreeVisitor
 			var rightType = resolver.calculateType(opnode.getRight());
 
 			// we're interested in all binary expressions where:
-			// 1. at least one argument is a non-primitive type, and
+			// 1. at least one argument is a user-defined type, and
 			// 2. if the operator is '+', neither of the arguments are a String (otherwise we have a string concat)
-			if(!leftType.isPrimitive() || !rightType.isPrimitive())
+			if(!isBuiltinType(leftType) || !isBuiltinType(rightType))
 			{
 				if(opnode.getOperator() == BinaryExpr.Operator.PLUS)
 				{

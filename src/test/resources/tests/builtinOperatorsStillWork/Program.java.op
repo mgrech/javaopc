@@ -9,5 +9,10 @@ public class Program
 		System.out.println(a - b);
 		b -= a;
 		System.out.println(b);
+
+		var c = (Integer)a;
+		var d = (Integer)b;
+		d -= c;
+		System.out.println(d);
 	}
 }
