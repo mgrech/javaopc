@@ -5,6 +5,8 @@ import com.github.javaparser.ast.expr.UnaryExpr;
 
 public class OperatorNames
 {
+	public static final String INVOCATION = "opInvoke";
+
 	public static String mapToMethodName(UnaryExpr.Operator op)
 	{
 		switch(op)

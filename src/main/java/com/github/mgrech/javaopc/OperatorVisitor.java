@@ -190,6 +190,8 @@ public class OperatorVisitor extends TreeVisitor
 
 		if(Types.isFunctionalInterface(type))
 		{
+			// obj.method(args...)
+
 			var methods = type.asReferenceType().getTypeDeclaration().getDeclaredMethods();
 			var abstractMethods = methods.stream()
 			                    .filter(m -> m.isAbstract())
@@ -201,9 +203,15 @@ public class OperatorVisitor extends TreeVisitor
 			var invocation = new MethodCallExpr(nameExpr, method.getName(), expr.getArguments());
 			expr.replace(invocation);
 		}
-		else
+		else // T.opInvoke(obj, args...)
 		{
-			throw new RuntimeException("nyi");
+			var typeName = type.asReferenceType().getTypeDeclaration().getName();
+			var allArgs = expr.getArguments();
+			allArgs.add(0, nameExpr);
+			var invocation = new MethodCallExpr(new NameExpr(typeName), OperatorNames.INVOCATION, allArgs);
+
+			if(isValidInvocation(expr, invocation))
+				expr.replace(invocation);
 		}
 	}
 

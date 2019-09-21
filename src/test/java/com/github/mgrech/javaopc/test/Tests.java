@@ -17,6 +17,12 @@ public class Tests
 	}
 
 	@Test
+	public void invocationOperatorWithExplicitOverloadingCompiles()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void lookupFindsOverloadsInArgumentClass()
 	{
 		Driver.runTest();
