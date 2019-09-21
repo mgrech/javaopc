@@ -41,4 +41,31 @@ public class Types
 	{
 		return type.isReferenceType() && type.asReferenceType().getTypeDeclaration().isFunctionalInterface();
 	}
+
+	public static ResolvedType isComparable(ResolvedType type)
+	{
+		if(!type.isReferenceType())
+			return null;
+
+		var rtype = type.asReferenceType();
+
+		if(!rtype.getQualifiedName().equals("java.lang.Comparable"))
+			return null;
+
+		return rtype.getTypeParametersMap().get(0).b;
+	}
+
+	public static ResolvedType implementsComparable(ResolvedType type)
+	{
+		if(!type.isReferenceType())
+			return null;
+
+		ResolvedType comparable = null;
+
+		for(var supertype : type.asReferenceType().getAllAncestors())
+			if((comparable = Types.isComparable(supertype)) != null)
+				break;
+
+		return comparable;
+	}
 }

@@ -11,6 +11,24 @@ public class Tests
 	}
 
 	@Test
+	public void comparisonOperatorsAsymmetric1stChoiceCompile()
+	{
+		Driver.runTest();
+	}
+
+	@Test
+	public void comparisonOperatorsAsymmetric2ndChoiceCompile()
+	{
+		Driver.runTest();
+	}
+
+	@Test
+	public void comparisonOperatorsSymmetricCompile()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void invocationOperatorForFunctionalInterfaceCompiles()
 	{
 		Driver.runTest();

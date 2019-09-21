@@ -140,6 +140,46 @@ public class OperatorVisitor extends TreeVisitor
 		}
 	}
 
+	private BinaryExpr.Operator flip(BinaryExpr.Operator op)
+	{
+		switch(op)
+		{
+		case LESS:           return BinaryExpr.Operator.GREATER;
+		case LESS_EQUALS:    return BinaryExpr.Operator.GREATER_EQUALS;
+		case GREATER:        return BinaryExpr.Operator.LESS;
+		case GREATER_EQUALS: return BinaryExpr.Operator.LESS_EQUALS;
+		default: break;
+		}
+
+		throw new AssertionError("unreachable");
+	}
+
+	private void rewriteComparison(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
+	{
+		var leftComparable = Types.implementsComparable(leftType);
+		var rightComparable = Types.implementsComparable(rightType);
+
+		if(leftComparable == null && rightComparable == null)
+			return;
+
+		var left = expr.getLeft();
+		var right = expr.getRight();
+		var op = expr.getOperator();
+
+		// fallback: flip around if left operand does not support comparable
+		if(leftComparable == null)
+		{
+			var tmp = left;
+			left = right;
+			right = tmp;
+			op = flip(op);
+		}
+
+		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var invocation = new MethodCallExpr(left, methodName, NodeList.nodeList(right));
+		expr.replace(new BinaryExpr(invocation, new IntegerLiteralExpr(0), op));
+	}
+
 	private void visit(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
 	{
 		switch(expr.getOperator())
@@ -154,7 +194,8 @@ public class OperatorVisitor extends TreeVisitor
 		case LESS_EQUALS:
 		case GREATER:
 		case GREATER_EQUALS:
-			throw new AssertionError("nyi");
+			rewriteComparison(expr, leftType, rightType);
+			break;
 
 		case PLUS:
 		case MINUS:
@@ -167,16 +208,18 @@ public class OperatorVisitor extends TreeVisitor
 		case LEFT_SHIFT:
 		case SIGNED_RIGHT_SHIFT:
 		case UNSIGNED_RIGHT_SHIFT:
-			var methodName = OperatorNames.mapToMethodName(expr.getOperator());
-			var args = List.of(expr.getLeft(), expr.getRight());
-			var argTypes = List.of(leftType, rightType);
-			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
+			{
+				var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+				var args = List.of(expr.getLeft(), expr.getRight());
+				var argTypes = List.of(leftType, rightType);
+				var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
 
-			if(invocation == null)
-				CompileErrors.noApplicableMethodFound();
+				if(invocation == null)
+					CompileErrors.noApplicableMethodFound();
 
-			expr.replace(invocation);
-			break;
+				expr.replace(invocation);
+				break;
+			}
 		}
 	}
 
