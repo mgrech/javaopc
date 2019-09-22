@@ -269,6 +269,17 @@ public class OperatorVisitor extends TreeVisitor
 			expr.replace(invocation);
 	}
 
+	private void rewriteArrayAccessToSubscriptSet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
+	{
+		var assignExpr = (AssignExpr)expr.getParentNode().get();
+		var name = subscriptedType.getTypeDeclaration().getName();
+		var args = NodeList.nodeList(expr.getName(), expr.getIndex(), assignExpr.getValue());
+		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_SET, args);
+
+		if(isValidInvocation(assignExpr, invocation))
+			assignExpr.replace(invocation);
+	}
+
 	@Override
 	public void process(Node node)
 	{
@@ -320,8 +331,18 @@ public class OperatorVisitor extends TreeVisitor
 			var opnode = (ArrayAccessExpr)node;
 			var leftType = opnode.calculateResolvedType();
 
-			if(!Types.isBuiltinType(leftType))
-				rewriteArrayAccessToSubscriptGet(opnode, leftType.asReferenceType());
+			var parent = opnode.getParentNode().orElse(null);
+
+			if(parent instanceof AssignExpr)
+			{
+				if(!Types.isBuiltinType(leftType))
+					rewriteArrayAccessToSubscriptSet(opnode, leftType.asReferenceType());
+			}
+			else
+			{
+				if(!Types.isBuiltinType(leftType))
+					rewriteArrayAccessToSubscriptGet(opnode, leftType.asReferenceType());
+			}
 		}
 	}
 }
