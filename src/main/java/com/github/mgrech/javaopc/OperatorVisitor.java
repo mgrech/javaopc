@@ -128,7 +128,7 @@ public class OperatorVisitor extends TreeVisitor
 			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
 
 			if(invocation == null)
-				CompileErrors.noApplicableMethodFound();
+				CompileErrors.noApplicableMethodFound(methodName);
 
 			expr.replace(invocation);
 			break;
@@ -216,7 +216,7 @@ public class OperatorVisitor extends TreeVisitor
 				var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
 
 				if(invocation == null)
-					CompileErrors.noApplicableMethodFound();
+					CompileErrors.noApplicableMethodFound(methodName);
 
 				expr.replace(invocation);
 				break;
