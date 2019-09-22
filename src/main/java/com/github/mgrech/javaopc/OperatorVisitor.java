@@ -272,8 +272,22 @@ public class OperatorVisitor extends TreeVisitor
 	private void rewriteArrayAccessToSubscriptSet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
 	{
 		var assignExpr = (AssignExpr)expr.getParentNode().get();
+
+		var op = assignExpr.getOperator();
 		var name = subscriptedType.getTypeDeclaration().getName();
-		var args = NodeList.nodeList(expr.getName(), expr.getIndex(), assignExpr.getValue());
+		var assignedValue = assignExpr.getValue();
+
+		// if we have a[i] @= v, rewrite to
+		// T.opSubscriptSet(a, i, T.opSubscriptGet(a, i) @ v)
+		if(op != AssignExpr.Operator.ASSIGN)
+		{
+			var binop = op.toBinaryOperator().get();
+			var arrayGetArgs = NodeList.nodeList(expr.getName(), expr.getIndex());
+			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, arrayGetArgs);
+			assignedValue = new BinaryExpr(arrayGetExpr, assignedValue, binop);
+		}
+
+		var args = NodeList.nodeList(expr.getName(), expr.getIndex(), assignedValue);
 		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_SET, args);
 
 		if(isValidInvocation(assignExpr, invocation))
@@ -289,7 +303,18 @@ public class OperatorVisitor extends TreeVisitor
 
 			// we're interested compound assignment operators only, not simple assignment
 			if(opnode.getOperator() != AssignExpr.Operator.ASSIGN)
+			{
+				if(opnode.getTarget() instanceof ArrayAccessExpr)
+				{
+					// we've already replaced this assignment by the time we get here,
+					// but our visitor iteration is not aware of this
+					// we can just ignore the expression in this case;
+					// the parent of this node is the correct next node
+					return;
+				}
+
 				rewriteCompoundAssignment(opnode);
+			}
 		}
 		else if(node instanceof UnaryExpr)
 		{

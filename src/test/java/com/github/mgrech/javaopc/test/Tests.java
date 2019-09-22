@@ -95,6 +95,12 @@ public class Tests
 	}
 
 	@Test
+	public void simpleOverloadedSubscriptSetOperatorWithCompoundAssignmentCompiles()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void simpleOverloadedUnaryOperatorUsageCompiles()
 	{
 		Driver.runTest();
