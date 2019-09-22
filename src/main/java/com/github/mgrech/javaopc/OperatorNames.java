@@ -6,6 +6,7 @@ import com.github.javaparser.ast.expr.UnaryExpr;
 public class OperatorNames
 {
 	public static final String INVOCATION = "opInvoke";
+	public static final String SUBSCRIPT_GET = "opSubscriptGet";
 
 	public static String mapToMethodName(UnaryExpr.Operator op)
 	{

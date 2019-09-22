@@ -5,6 +5,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.visitor.TreeVisitor;
 import com.github.javaparser.resolution.SymbolResolver;
+import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 
 import java.util.ArrayList;
@@ -258,6 +259,16 @@ public class OperatorVisitor extends TreeVisitor
 		}
 	}
 
+	private void rewriteArrayAccessToSubscriptGet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
+	{
+		var name = subscriptedType.getTypeDeclaration().getName();
+		var args = NodeList.nodeList(expr.getName(), expr.getIndex());
+		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, args);
+
+		if(isValidInvocation(expr, invocation))
+			expr.replace(invocation);
+	}
+
 	@Override
 	public void process(Node node)
 	{
@@ -303,6 +314,14 @@ public class OperatorVisitor extends TreeVisitor
 
 			if(!isValidInvocation(opnode))
 				visit(opnode);
+		}
+		else if(node instanceof ArrayAccessExpr)
+		{
+			var opnode = (ArrayAccessExpr)node;
+			var leftType = opnode.calculateResolvedType();
+
+			if(!Types.isBuiltinType(leftType))
+				rewriteArrayAccessToSubscriptGet(opnode, leftType.asReferenceType());
 		}
 	}
 }
