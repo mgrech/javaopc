@@ -1,4 +1,4 @@
-package com.github.mgrech.javaopc;
+package dev.mgrech.javaopc;
 
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;

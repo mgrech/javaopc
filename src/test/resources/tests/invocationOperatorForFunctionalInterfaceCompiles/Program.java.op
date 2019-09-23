@@ -1,4 +1,4 @@
-import com.github.mgrech.javaopc.test.BigInteger2;
+import dev.mgrech.javaopc.test.BigInteger2;
 
 import java.util.function.*;
 

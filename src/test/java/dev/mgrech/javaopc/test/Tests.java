@@ -1,4 +1,4 @@
-package com.github.mgrech.javaopc.test;
+package dev.mgrech.javaopc.test;
 
 import org.junit.Test;
 

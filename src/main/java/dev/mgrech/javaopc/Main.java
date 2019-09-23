@@ -1,4 +1,4 @@
-package com.github.mgrech.javaopc;
+package dev.mgrech.javaopc;
 
 import com.github.javaparser.Providers;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;

@@ -1,8 +1,8 @@
-package com.github.mgrech.javaopc.test;
+package dev.mgrech.javaopc.test;
 
 import com.github.javaparser.Providers;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-import com.github.mgrech.javaopc.JavaOperatorCompiler;
+import dev.mgrech.javaopc.JavaOperatorCompiler;
 import org.junit.Assert;
 import org.mdkt.compiler.InMemoryJavaCompiler;
 

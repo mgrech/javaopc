@@ -1,4 +1,4 @@
-package com.github.mgrech.javaopc;
+package dev.mgrech.javaopc;
 
 import com.github.javaparser.resolution.types.ResolvedType;
 

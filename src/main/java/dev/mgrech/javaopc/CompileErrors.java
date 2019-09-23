@@ -1,4 +1,4 @@
-package com.github.mgrech.javaopc;
+package dev.mgrech.javaopc;
 
 public class CompileErrors
 {

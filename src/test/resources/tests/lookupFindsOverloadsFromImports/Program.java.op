@@ -1,6 +1,6 @@
 import java.math.BigInteger;
 
-import static com.github.mgrech.javaopc.test.BigIntegerExtensions.*;
+import static dev.mgrech.javaopc.test.BigIntegerExtensions.*;
 
 public class Program
 {
