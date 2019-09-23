@@ -385,7 +385,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		if(parent instanceof AssignExpr)
 			return null;
 
-		var leftType = expr.calculateResolvedType();
+		var leftType = expr.getName().calculateResolvedType();
 
 		// overloaded subscript only for user-defined types
 		if(Types.isBuiltinType(leftType))

@@ -71,6 +71,12 @@ public class Tests
 	}
 
 	@Test
+	public void nestedOverloadedSubscriptCompiles()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void simpleCompoundAssignmentRewritingCompiles()
 	{
 		Driver.runTest();
