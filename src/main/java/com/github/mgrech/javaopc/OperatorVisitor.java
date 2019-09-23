@@ -1,10 +1,8 @@
 package com.github.mgrech.javaopc;
 
-import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.ast.visitor.TreeVisitor;
-import com.github.javaparser.resolution.SymbolResolver;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 
@@ -13,26 +11,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class OperatorVisitor extends TreeVisitor
+public class OperatorVisitor implements ExprRewritingVisitor
 {
-	private final SymbolResolver resolver;
-
-	public OperatorVisitor(SymbolResolver resolver)
-	{
-		this.resolver = resolver;
-	}
-
-	private void rewriteCompoundAssignment(AssignExpr expr)
+	private Expression rewriteCompoundAssignment(AssignExpr expr)
 	{
 		var binaryOp = expr.getOperator().toBinaryOperator().get();
+
+		var leftType = expr.getTarget().calculateResolvedType();
+		var rightType = expr.getValue().calculateResolvedType();
+
 		var binaryExpr = new BinaryExpr(expr.getTarget(), expr.getValue(), binaryOp);
 		var assignExpr = new AssignExpr(expr.getTarget(), binaryExpr, AssignExpr.Operator.ASSIGN);
-		expr.replace(assignExpr);
-		process(binaryExpr);
 
-		// undo rewriting if this was not an overloaded operator for cleaner code output
-		if(assignExpr.getValue() == binaryExpr)
-			assignExpr.replace(expr);
+		expr.replace(assignExpr);
+		var finalBinaryExpr = rewriteBinaryOperator(binaryExpr, leftType, rightType);
+		assignExpr.replace(expr);
+
+		if(finalBinaryExpr == null)
+			return null;
+
+		assignExpr.replace(binaryExpr, finalBinaryExpr);
+		return assignExpr;
 	}
 
 	private static ResolvedType typeof(Expression location, Expression expr)
@@ -55,6 +54,8 @@ public class OperatorVisitor extends TreeVisitor
 
 	private static boolean isValidInvocation(MethodCallExpr invocation)
 	{
+		assert invocation.findAncestor(CompilationUnit.class).isPresent();
+
 		try
 		{
 			invocation.resolve();
@@ -112,12 +113,13 @@ public class OperatorVisitor extends TreeVisitor
 		return CompileErrors.ambiguousMethodCall();
 	}
 
-	private void visit(UnaryExpr expr, ResolvedType argType)
+	private Expression rewriteUnaryOperator(UnaryExpr expr, ResolvedType argType)
 	{
 		switch(expr.getOperator())
 		{
 		case LOGICAL_COMPLEMENT:
-			break;
+			// not overloadable: '!'
+			return null;
 
 		case PLUS:
 		case MINUS:
@@ -130,14 +132,15 @@ public class OperatorVisitor extends TreeVisitor
 			if(invocation == null)
 				CompileErrors.noApplicableMethodFound(methodName);
 
-			expr.replace(invocation);
-			break;
+			return invocation;
 
 		case PREFIX_INCREMENT:
 		case PREFIX_DECREMENT:
 		case POSTFIX_INCREMENT:
 		case POSTFIX_DECREMENT:
 			throw new AssertionError("nyi");
+
+		default: throw new AssertionError("unknown unary operator: " + expr.getOperator());
 		}
 	}
 
@@ -155,13 +158,13 @@ public class OperatorVisitor extends TreeVisitor
 		throw new AssertionError("unreachable");
 	}
 
-	private void rewriteComparison(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
+	private Expression rewriteComparison(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
 	{
 		var leftComparable = Types.implementsComparable(leftType);
 		var rightComparable = Types.implementsComparable(rightType);
 
 		if(leftComparable == null && rightComparable == null)
-			return;
+			return null;
 
 		var left = expr.getLeft();
 		var right = expr.getRight();
@@ -178,10 +181,10 @@ public class OperatorVisitor extends TreeVisitor
 
 		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
 		var invocation = new MethodCallExpr(left, methodName, NodeList.nodeList(right));
-		expr.replace(new BinaryExpr(invocation, new IntegerLiteralExpr(0), op));
+		return new BinaryExpr(invocation, new IntegerLiteralExpr(0), op);
 	}
 
-	private void visit(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
+	private Expression rewriteBinaryOperator(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
 	{
 		switch(expr.getOperator())
 		{
@@ -189,14 +192,14 @@ public class OperatorVisitor extends TreeVisitor
 		case OR:
 		case EQUALS:
 		case NOT_EQUALS:
-			break;
+			// not overloadable: '&&', '||', '==', '!='
+			return null;
 
 		case LESS:
 		case LESS_EQUALS:
 		case GREATER:
 		case GREATER_EQUALS:
-			rewriteComparison(expr, leftType, rightType);
-			break;
+			return rewriteComparison(expr, leftType, rightType);
 
 		case PLUS:
 		case MINUS:
@@ -218,19 +221,20 @@ public class OperatorVisitor extends TreeVisitor
 				if(invocation == null)
 					CompileErrors.noApplicableMethodFound(methodName);
 
-				expr.replace(invocation);
-				break;
+				return invocation;
 			}
+
+		default: throw new AssertionError("unknown binary operator: " + expr.getOperator());
 		}
 	}
 
-	private void visit(MethodCallExpr expr)
+	private Expression rewriteMethodInvocation(MethodCallExpr expr)
 	{
 		var nameExpr = new NameExpr(expr.getName());
 		var type = typeof(expr, nameExpr);
 
 		if(type == null)
-			return;
+			return null;
 
 		if(Types.isFunctionalInterface(type))
 		{
@@ -244,8 +248,7 @@ public class OperatorVisitor extends TreeVisitor
 			assert abstractMethods.size() == 1;
 
 			var method = abstractMethods.get(0);
-			var invocation = new MethodCallExpr(nameExpr, method.getName(), expr.getArguments());
-			expr.replace(invocation);
+			return new MethodCallExpr(nameExpr, method.getName(), expr.getArguments());
 		}
 		else // T.opInvoke(obj, args...)
 		{
@@ -255,119 +258,139 @@ public class OperatorVisitor extends TreeVisitor
 			var invocation = new MethodCallExpr(new NameExpr(typeName), OperatorNames.INVOCATION, allArgs);
 
 			if(isValidInvocation(expr, invocation))
-				expr.replace(invocation);
+				return invocation;
+
+			return null;
 		}
 	}
 
-	private void rewriteArrayAccessToSubscriptGet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
+	private Expression rewriteArrayAccessToSubscriptGet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
 	{
 		var name = subscriptedType.getTypeDeclaration().getName();
 		var args = NodeList.nodeList(expr.getName(), expr.getIndex());
 		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, args);
 
 		if(isValidInvocation(expr, invocation))
-			expr.replace(invocation);
+			return invocation;
+
+		return null;
 	}
 
-	private void rewriteArrayAccessToSubscriptSet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
+	private Expression rewriteArrayAccessToSubscriptSet(AssignExpr expr)
 	{
-		var assignExpr = (AssignExpr)expr.getParentNode().get();
+		var arrayAccessExpr = (ArrayAccessExpr)expr.getTarget();
 
-		var op = assignExpr.getOperator();
-		var name = subscriptedType.getTypeDeclaration().getName();
-		var assignedValue = assignExpr.getValue();
+		var op = expr.getOperator();
+		var name = arrayAccessExpr.calculateResolvedType().asReferenceType().getTypeDeclaration().getName();
+		var assignedValue = expr.getValue();
 
 		// if we have a[i] @= v, rewrite to
 		// T.opSubscriptSet(a, i, T.opSubscriptGet(a, i) @ v)
 		if(op != AssignExpr.Operator.ASSIGN)
 		{
 			var binop = op.toBinaryOperator().get();
-			var arrayGetArgs = NodeList.nodeList(expr.getName(), expr.getIndex());
+			var arrayGetArgs = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex());
 			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, arrayGetArgs);
 			assignedValue = new BinaryExpr(arrayGetExpr, assignedValue, binop);
 		}
 
-		var args = NodeList.nodeList(expr.getName(), expr.getIndex(), assignedValue);
+		var args = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex(), assignedValue);
 		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_SET, args);
 
-		if(isValidInvocation(assignExpr, invocation))
-			assignExpr.replace(invocation);
+		if(isValidInvocation(expr, invocation))
+			return invocation;
+
+		return null;
 	}
 
 	@Override
-	public void process(Node node)
+	public Expression visit(AssignExpr expr)
 	{
-		if(node instanceof AssignExpr)
-		{
-			var opnode = (AssignExpr)node;
+		var leftType = expr.getTarget().calculateResolvedType();
+		var rightType = expr.getValue().calculateResolvedType();
 
-			// we're interested compound assignment operators only, not simple assignment
-			if(opnode.getOperator() != AssignExpr.Operator.ASSIGN)
+		// if we have an array access on the left side, we need to generate opSubscriptSet
+		// also rewrites compound assignment if necessary
+		if(expr.getTarget() instanceof ArrayAccessExpr && !Types.isBuiltinType(leftType))
+			return rewriteArrayAccessToSubscriptSet(expr);
+
+		// we're interested in compound assignment operators only, not simple assignment
+		if(expr.getOperator() == AssignExpr.Operator.ASSIGN)
+			return null;
+
+		// at least one argument must have user-defined type
+		if(Types.isBuiltinType(leftType) && Types.isBuiltinType(rightType))
+			return null;
+
+		// we don't rewrite += if one argument is a String
+		if(expr.getOperator() == AssignExpr.Operator.PLUS)
+		{
+			if(Types.isJavaLangString(leftType) || Types.isJavaLangString(rightType))
+					return null;
+		}
+
+		return rewriteCompoundAssignment(expr);
+	}
+
+	@Override
+	public Expression visit(UnaryExpr expr)
+	{
+		var argType = expr.getExpression().calculateResolvedType();
+
+		if(!argType.isPrimitive())
+			return rewriteUnaryOperator(expr, argType);
+
+		return null;
+	}
+
+	@Override
+	public Expression visit(BinaryExpr expr)
+	{
+		var leftType = expr.getLeft().calculateResolvedType();
+		var rightType = expr.getRight().calculateResolvedType();
+
+		// we're interested in all binary expressions where:
+		// 1. at least one argument is a user-defined type, and
+		// 2. if the operator is '+', neither of the arguments are a String (otherwise we have a string concat)
+		if(!Types.isBuiltinType(leftType) || !Types.isBuiltinType(rightType))
+		{
+			if(expr.getOperator() == BinaryExpr.Operator.PLUS)
 			{
-				if(opnode.getTarget() instanceof ArrayAccessExpr)
-				{
-					// we've already replaced this assignment by the time we get here,
-					// but our visitor iteration is not aware of this
-					// we can just ignore the expression in this case;
-					// the parent of this node is the correct next node
-					return;
-				}
-
-				rewriteCompoundAssignment(opnode);
-			}
-		}
-		else if(node instanceof UnaryExpr)
-		{
-			var opnode = (UnaryExpr)node;
-			var argType = resolver.calculateType(opnode.getExpression());
-
-			if(!argType.isPrimitive())
-				visit(opnode, argType);
-		}
-		else if(node instanceof BinaryExpr)
-		{
-			var opnode = (BinaryExpr)node;
-			var leftType = resolver.calculateType(opnode.getLeft());
-			var rightType = resolver.calculateType(opnode.getRight());
-
-			// we're interested in all binary expressions where:
-			// 1. at least one argument is a user-defined type, and
-			// 2. if the operator is '+', neither of the arguments are a String (otherwise we have a string concat)
-			if(!Types.isBuiltinType(leftType) || !Types.isBuiltinType(rightType))
-			{
-				if(opnode.getOperator() == BinaryExpr.Operator.PLUS)
-				{
-					if(!Types.isJavaLangString(leftType) && !Types.isJavaLangString(rightType))
-						visit(opnode, leftType, rightType);
-				}
-				else
-					visit(opnode, leftType, rightType);
-			}
-		}
-		else if(node instanceof MethodCallExpr)
-		{
-			var opnode = (MethodCallExpr)node;
-
-			if(!isValidInvocation(opnode))
-				visit(opnode);
-		}
-		else if(node instanceof ArrayAccessExpr)
-		{
-			var opnode = (ArrayAccessExpr)node;
-			var leftType = opnode.calculateResolvedType();
-
-			var parent = opnode.getParentNode().orElse(null);
-
-			if(parent instanceof AssignExpr)
-			{
-				if(!Types.isBuiltinType(leftType))
-					rewriteArrayAccessToSubscriptSet(opnode, leftType.asReferenceType());
+				if(!Types.isJavaLangString(leftType) && !Types.isJavaLangString(rightType))
+					return rewriteBinaryOperator(expr, leftType, rightType);
 			}
 			else
-			{
-				if(!Types.isBuiltinType(leftType))
-					rewriteArrayAccessToSubscriptGet(opnode, leftType.asReferenceType());
-			}
+				return rewriteBinaryOperator(expr, leftType, rightType);
 		}
+
+		return null;
+	}
+
+	@Override
+	public Expression visit(MethodCallExpr expr)
+	{
+		// if the invocation is already valid, it's not an overloaded invocation
+		if(isValidInvocation(expr))
+			return null;
+
+		return rewriteMethodInvocation(expr);
+	}
+
+	@Override
+	public Expression visit(ArrayAccessExpr expr)
+	{
+		var parent = expr.getParentNode().orElse(null);
+
+		// if we hit a subscript with assignment, do nothing (rewriting happens in 'visit(AssignExpr)')
+		if(parent instanceof AssignExpr)
+			return null;
+
+		var leftType = expr.calculateResolvedType();
+
+		// overloaded subscript only for user-defined types
+		if(Types.isBuiltinType(leftType))
+			return null;
+
+		return rewriteArrayAccessToSubscriptGet(expr, leftType.asReferenceType());
 	}
 }
