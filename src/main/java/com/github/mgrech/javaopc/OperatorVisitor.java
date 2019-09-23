@@ -113,6 +113,19 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		return CompileErrors.ambiguousMethodCall();
 	}
 
+	private Expression rewritePreAnycrement(UnaryExpr expr, ResolvedReferenceType argType)
+	{
+		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var args = NodeList.nodeList(expr.getExpression());
+
+		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
+
+		if(invocation == null)
+			return null;
+
+		return new AssignExpr(expr.getExpression(), invocation, AssignExpr.Operator.ASSIGN);
+	}
+
 	private Expression rewriteUnaryOperator(UnaryExpr expr, ResolvedType argType)
 	{
 		switch(expr.getOperator())
@@ -136,6 +149,13 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 		case PREFIX_INCREMENT:
 		case PREFIX_DECREMENT:
+			var type = expr.getExpression().calculateResolvedType();
+
+			if(Types.isBuiltinType(type))
+				return null;
+
+			return rewritePreAnycrement(expr, type.asReferenceType());
+
 		case POSTFIX_INCREMENT:
 		case POSTFIX_DECREMENT:
 			throw new AssertionError("nyi");

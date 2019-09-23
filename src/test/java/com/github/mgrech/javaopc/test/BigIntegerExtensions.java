@@ -9,4 +9,14 @@ public class BigIntegerExtensions
 	{
 		return left.add(right);
 	}
+
+	public static BigInteger opIncrement(BigInteger i)
+	{
+		return i.add(BigInteger.ONE);
+	}
+
+	public static BigInteger opDecrement(BigInteger i)
+	{
+		return i.subtract(BigInteger.ONE);
+	}
 }
