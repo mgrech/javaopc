@@ -1,7 +1,10 @@
 package com.github.mgrech.javaopc;
 
 import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+
+import java.util.ArrayList;
 
 public class ExprRewritingVisitorAdapter extends VoidVisitorAdapter<Void>
 {
@@ -16,6 +19,16 @@ public class ExprRewritingVisitorAdapter extends VoidVisitorAdapter<Void>
 	{
 		if(replacement != null)
 			expr.replace(replacement);
+	}
+
+	@Override
+	public void visit(BlockStmt stmt, Void arg)
+	{
+		// avoid ConcurrentModificationException
+		var copy = new ArrayList<>(stmt.getStatements());
+		copy.forEach(s -> s.accept(this, arg));
+
+		stmt.getComment().ifPresent(c -> c.accept(this, arg));
 	}
 
 	@Override

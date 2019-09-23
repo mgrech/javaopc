@@ -89,6 +89,12 @@ public class Tests
 	}
 
 	@Test
+	public void simpleOverloadedPostfixAnycrementOperatorCompiles()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void simpleOverloadedPrefixAnycrementOperatorCompiles()
 	{
 		Driver.runTest();

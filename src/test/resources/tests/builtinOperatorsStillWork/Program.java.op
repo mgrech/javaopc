@@ -14,5 +14,10 @@ public class Program
 		var d = (Integer)b;
 		d -= c;
 		System.out.println(d);
+
+		++d;
+		c--;
+		System.out.println(c);
+		System.out.println(d);
 	}
 }

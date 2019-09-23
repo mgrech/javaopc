@@ -2,7 +2,12 @@ package com.github.mgrech.javaopc;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 
@@ -13,6 +18,8 @@ import java.util.stream.Collectors;
 
 public class OperatorVisitor implements ExprRewritingVisitor
 {
+	private int tempVarCounter = 0;
+
 	private Expression rewriteCompoundAssignment(AssignExpr expr)
 	{
 		var binaryOp = expr.getOperator().toBinaryOperator().get();
@@ -126,6 +133,70 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		return new AssignExpr(expr.getExpression(), invocation, AssignExpr.Operator.ASSIGN);
 	}
 
+	private void insertSiblingStmtBefore(Statement location, Statement insert)
+	{
+		var parent = location.findAncestor(Statement.class).orElse(null);
+
+		if(!(parent instanceof BlockStmt))
+		{
+			assert parent != null;
+
+			var block = new BlockStmt();
+			block.addStatement(insert);
+			block.addStatement(location);
+			parent.replace(block);
+		}
+		else
+		{
+			var block = (BlockStmt)parent;
+			var index = block.getStatements().indexOf(location);
+			block.addStatement(index, insert);
+		}
+	}
+
+	private Statement enclosingStmt(Expression expr)
+	{
+		var stmt = expr.findAncestor(Statement.class).orElse(null);
+		assert stmt != null;
+		return stmt;
+	}
+
+	private Expression hoistVar(Statement location, Expression expr, String tag)
+	{
+		var name = String.format("__temp%s__%s__", tempVarCounter++, tag);
+		var decl = new VariableDeclarator(new VarType(), name, expr.clone());
+		insertSiblingStmtBefore(location, new ExpressionStmt(new VariableDeclarationExpr(decl)));
+		return new NameExpr(name);
+	}
+
+	private void removeSiblingStmtBefore(Statement location)
+	{
+		var block = (BlockStmt)location.getParentNode().get();
+		var index = block.getStatements().indexOf(location) - 1;
+		block.getStatements().remove(index);
+	}
+
+	private Expression rewritePostAnycrement(UnaryExpr expr, ResolvedReferenceType argType)
+	{
+		var stmt = enclosingStmt(expr);
+		var oldExpr = hoistVar(stmt, expr.getExpression(), "old");
+
+		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var args = List.of(expr.getExpression());
+		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
+
+		if(invocation == null)
+		{
+			// remove the hoisted var again if we don't do anything with it
+			removeSiblingStmtBefore(stmt);
+			return null;
+		}
+
+		var assignment = new AssignExpr(expr.getExpression(), invocation, AssignExpr.Operator.ASSIGN);
+		insertSiblingStmtBefore(stmt, new ExpressionStmt(assignment));
+		return oldExpr;
+	}
+
 	private Expression rewriteUnaryOperator(UnaryExpr expr, ResolvedType argType)
 	{
 		switch(expr.getOperator())
@@ -149,16 +220,25 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 		case PREFIX_INCREMENT:
 		case PREFIX_DECREMENT:
-			var type = expr.getExpression().calculateResolvedType();
+			{
+				var type = expr.getExpression().calculateResolvedType();
 
-			if(Types.isBuiltinType(type))
-				return null;
+				if(Types.isBuiltinType(type))
+					return null;
 
-			return rewritePreAnycrement(expr, type.asReferenceType());
+				return rewritePreAnycrement(expr, type.asReferenceType());
+			}
 
 		case POSTFIX_INCREMENT:
 		case POSTFIX_DECREMENT:
-			throw new AssertionError("nyi");
+			{
+				var type = expr.getExpression().calculateResolvedType();
+
+				if(Types.isBuiltinType(type))
+					return null;
+
+				return rewritePostAnycrement(expr, type.asReferenceType());
+			}
 
 		default: throw new AssertionError("unknown unary operator: " + expr.getOperator());
 		}
