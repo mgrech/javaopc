@@ -7,6 +7,8 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -492,5 +494,58 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			return null;
 
 		return rewriteArrayAccessToSubscriptGet(expr, leftType.asReferenceType());
+	}
+
+	private Expression dummyValue(ResolvedType type, Type staticType)
+	{
+		if(type.isReferenceType())
+			return new CastExpr(staticType, new NullLiteralExpr());
+
+		if(type.isPrimitive())
+		{
+			var primitive = type.asPrimitive();
+
+			switch(primitive)
+			{
+			case BOOLEAN: return new BooleanLiteralExpr(false);
+			case CHAR: return new CharLiteralExpr('\0');
+
+			case BYTE: return new CastExpr(PrimitiveType.byteType(), new IntegerLiteralExpr(0));
+			case SHORT: return new CastExpr(PrimitiveType.shortType(), new IntegerLiteralExpr(0));
+			case INT: return new CastExpr(PrimitiveType.intType(), new IntegerLiteralExpr(0));
+			case LONG: return new CastExpr(PrimitiveType.longType(), new IntegerLiteralExpr(0));
+
+			case FLOAT: return new CastExpr(PrimitiveType.floatType(), new DoubleLiteralExpr(0));
+			case DOUBLE: return new CastExpr(PrimitiveType.doubleType(), new DoubleLiteralExpr(0));
+
+			default: throw new AssertionError("unknown primitive: " + primitive);
+			}
+		}
+
+		throw new AssertionError("unreachable");
+	}
+
+	private Expression rewriteConversion(CastExpr expr, ResolvedType sourceType, ResolvedType targetType)
+	{
+		var args = List.of(expr.getExpression(), dummyValue(targetType, expr.getType()));
+		var argTypes = List.of(sourceType, targetType);
+		var invocation = resolveOperatorInvocation(expr, OperatorNames.CONVERSION, args, argTypes);
+
+		if(isValidInvocation(expr, invocation))
+			return invocation;
+
+		return null;
+	}
+
+	@Override
+	public Expression visit(CastExpr expr)
+	{
+		var sourceType = expr.getExpression().calculateResolvedType();
+		var targetType = expr.getType().resolve();
+
+		if(!Types.isBuiltinType(sourceType) || !Types.isBuiltinType(targetType))
+			return rewriteConversion(expr, sourceType, targetType);
+
+		return null;
 	}
 }

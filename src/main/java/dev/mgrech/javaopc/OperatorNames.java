@@ -8,6 +8,7 @@ public class OperatorNames
 	public static final String INVOCATION = "opInvoke";
 	public static final String SUBSCRIPT_GET = "opSubscriptGet";
 	public static final String SUBSCRIPT_SET = "opSubscriptSet";
+	public static final String CONVERSION = "opConvert";
 
 	public static String mapToMethodName(UnaryExpr.Operator op)
 	{

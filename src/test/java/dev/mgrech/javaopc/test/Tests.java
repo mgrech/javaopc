@@ -65,6 +65,12 @@ public class Tests
 	}
 
 	@Test
+	public void overloadedConversionInCastContext()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void nestedOverloadedOperatorUsageCompiles()
 	{
 		Driver.runTest();

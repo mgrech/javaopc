@@ -36,4 +36,9 @@ public class BigInteger2
 	{
 		return new BigInteger2(left.value.subtract(right.value));
 	}
+
+	public static BigInteger2 opConvert(long l, BigInteger2 tag)
+	{
+		return new BigInteger2(l);
+	}
 }
