@@ -9,6 +9,7 @@ import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.VarType;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 
@@ -23,7 +24,8 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 	private Expression rewriteCompoundAssignment(AssignExpr expr)
 	{
-		var binaryOp = expr.getOperator().toBinaryOperator().get();
+		var binaryOp = expr.getOperator().toBinaryOperator().orElse(null);
+		assert binaryOp != null;
 
 		var leftType = expr.getTarget().calculateResolvedType();
 		var rightType = expr.getValue().calculateResolvedType();
@@ -172,7 +174,8 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 	private void removeSiblingStmtBefore(Statement location)
 	{
-		var block = (BlockStmt)location.getParentNode().get();
+		var block = (BlockStmt)location.getParentNode().orElse(null);
+		assert block != null;
 		var index = block.getStatements().indexOf(location) - 1;
 		block.getStatements().remove(index);
 	}
@@ -281,6 +284,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		}
 
 		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		assert methodName != null;
 		var invocation = new MethodCallExpr(left, methodName, NodeList.nodeList(right));
 		return new BinaryExpr(invocation, new IntegerLiteralExpr(0), op);
 	}
@@ -343,7 +347,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 			var methods = type.asReferenceType().getTypeDeclaration().getDeclaredMethods();
 			var abstractMethods = methods.stream()
-			                    .filter(m -> m.isAbstract())
+			                    .filter(ResolvedMethodDeclaration::isAbstract)
 			                    .collect(Collectors.toList());
 
 			assert abstractMethods.size() == 1;
@@ -389,7 +393,8 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		// T.opSubscriptSet(a, i, T.opSubscriptGet(a, i) @ v)
 		if(op != AssignExpr.Operator.ASSIGN)
 		{
-			var binop = op.toBinaryOperator().get();
+			var binop = op.toBinaryOperator().orElse(null);
+			assert binop != null;
 			var arrayGetArgs = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex());
 			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, arrayGetArgs);
 			assignedValue = new BinaryExpr(arrayGetExpr, assignedValue, binop);
