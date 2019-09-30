@@ -65,6 +65,12 @@ public class Tests
 	}
 
 	@Test
+	public void overloadedConversionInAssignmentContext()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void overloadedConversionInCastContext()
 	{
 		Driver.runTest();

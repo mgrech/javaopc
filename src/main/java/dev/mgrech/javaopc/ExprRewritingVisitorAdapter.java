@@ -219,4 +219,11 @@ public class ExprRewritingVisitorAdapter extends VoidVisitorAdapter<Void>
 		super.visit(expr, arg);
 		replaceIfNonNull(expr, visitor.visit(expr));
 	}
+
+	@Override
+	public void visit(VariableDeclarationExpr expr, Void arg)
+	{
+		super.visit(expr, arg);
+		replaceIfNonNull(expr, visitor.visit(expr));
+	}
 }

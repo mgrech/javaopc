@@ -138,4 +138,9 @@ public interface ExprRewritingVisitor
 	{
 		 return null;
 	}
+
+	default Expression visit(VariableDeclarationExpr expr)
+	{
+		return null;
+	}
 }

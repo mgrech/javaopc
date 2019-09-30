@@ -8,7 +8,6 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.PrimitiveType;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
@@ -405,6 +404,15 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		return null;
 	}
 
+	private Expression rewriteImplicitConversion(Expression expr, ResolvedType sourceType, ResolvedType targetType)
+	{
+		var args = List.of(expr, dummyValue(targetType));
+		var argTypes = List.of(sourceType, targetType);
+		var parent = expr.findAncestor(Expression.class).orElse(null);
+		assert parent != null;
+		return resolveOperatorInvocation(parent, OperatorNames.CONVERSION, args, argTypes);
+	}
+
 	@Override
 	public Expression visit(AssignExpr expr)
 	{
@@ -416,9 +424,24 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		if(expr.getTarget() instanceof ArrayAccessExpr && !Types.isBuiltinType(leftType))
 			return rewriteArrayAccessToSubscriptSet(expr);
 
-		// we're interested in compound assignment operators only, not simple assignment
 		if(expr.getOperator() == AssignExpr.Operator.ASSIGN)
+		{
+			// if the types match, we don't need to do anything ('=' is not overloadable)
+			if(leftType == rightType)
+				return null;
+
+			// if the types don't match and at least one is user-defined,
+			// there might be an implicit conversion to apply
+			if(!Types.isBuiltinType(leftType) || !Types.isBuiltinType(rightType))
+			{
+				var conv = rewriteImplicitConversion(expr.getValue(), rightType, leftType);
+
+				if(conv != null)
+					return new AssignExpr(expr.getTarget(), conv, AssignExpr.Operator.ASSIGN);
+			}
+
 			return null;
+		}
 
 		// at least one argument must have user-defined type
 		if(Types.isBuiltinType(leftType) && Types.isBuiltinType(rightType))
@@ -496,10 +519,10 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		return rewriteArrayAccessToSubscriptGet(expr, leftType.asReferenceType());
 	}
 
-	private Expression dummyValue(ResolvedType type, Type staticType)
+	private Expression dummyValue(ResolvedType type)
 	{
 		if(type.isReferenceType())
-			return new CastExpr(staticType, new NullLiteralExpr());
+			return new CastExpr(Types.resolvedTypeToType(type), new NullLiteralExpr());
 
 		if(type.isPrimitive())
 		{
@@ -525,18 +548,6 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		throw new AssertionError("unreachable");
 	}
 
-	private Expression rewriteConversion(CastExpr expr, ResolvedType sourceType, ResolvedType targetType)
-	{
-		var args = List.of(expr.getExpression(), dummyValue(targetType, expr.getType()));
-		var argTypes = List.of(sourceType, targetType);
-		var invocation = resolveOperatorInvocation(expr, OperatorNames.CONVERSION, args, argTypes);
-
-		if(isValidInvocation(expr, invocation))
-			return invocation;
-
-		return null;
-	}
-
 	@Override
 	public Expression visit(CastExpr expr)
 	{
@@ -544,7 +555,44 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var targetType = expr.getType().resolve();
 
 		if(!Types.isBuiltinType(sourceType) || !Types.isBuiltinType(targetType))
-			return rewriteConversion(expr, sourceType, targetType);
+		{
+			var conv = rewriteImplicitConversion(expr.getExpression(), sourceType, targetType);
+
+			if(conv != null)
+				return new CastExpr(expr.getType(), conv);
+		}
+
+		return null;
+	}
+
+	@Override
+	public Expression visit(VariableDeclarationExpr expr)
+	{
+		for(var variable : expr.getVariables())
+		{
+			var init = variable.getInitializer().orElse(null);
+
+			// skip if the var is declared with 'var', has no initializer or is initialized with a lambda
+			if(variable.getType().isUnknownType() || init == null || init instanceof LambdaExpr)
+				continue;
+
+			var varType = variable.getType().resolve();
+			var initType = variable.getInitializer().map(Expression::calculateResolvedType).orElse(null);
+			assert initType != null;
+
+			// skip if we have a 'null' initializer
+			if(initType.isNull())
+				continue;
+
+			// skip if the types match or not at least one of the types is user-defined
+			if(varType == initType || Types.isBuiltinType(varType) && Types.isBuiltinType(initType))
+				continue;
+
+			var conv = rewriteImplicitConversion(init, initType, varType);
+
+			if(conv != null)
+				variable.setInitializer(conv);
+		}
 
 		return null;
 	}
