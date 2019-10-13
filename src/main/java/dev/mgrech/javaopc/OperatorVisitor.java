@@ -7,7 +7,6 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.VarType;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
@@ -91,9 +90,9 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		return valid;
 	}
 
-	private MethodCallExpr resolveOperatorInvocation(Expression expr, String opMethodName, List<Expression> args, List<ResolvedType> argTypes)
+	private MethodCallExpr resolveOperatorInvocation(Expression expr, String opMethodName, List<Expression> args, List<ResolvedType> primaryTypes)
 	{
-		var typesDeduplicated = new HashSet<>(argTypes);
+		var typesDeduplicated = new HashSet<>(primaryTypes);
 		var candidates = new ArrayList<MethodCallExpr>();
 
 		for(var type : typesDeduplicated)
@@ -351,34 +350,20 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			                    .collect(Collectors.toList());
 
 			assert abstractMethods.size() == 1;
-
-			var method = abstractMethods.get(0);
-			return new MethodCallExpr(nameExpr, method.getName(), expr.getArguments());
+			return new MethodCallExpr(nameExpr, abstractMethods.get(0).getName(), expr.getArguments());
 		}
 		else // T.opInvoke(obj, args...)
 		{
-			var typeName = type.asReferenceType().getTypeDeclaration().getName();
-			var allArgs = expr.getArguments();
-			allArgs.add(0, nameExpr);
-			var invocation = new MethodCallExpr(new NameExpr(typeName), Operators.INVOCATION, allArgs);
-
-			if(isValidInvocation(expr, invocation))
-				return invocation;
-
-			return null;
+			var args = new ArrayList<>(expr.getArguments());
+			args.add(0, nameExpr);
+			return resolveOperatorInvocation(expr, Operators.INVOCATION, args, List.of(type));
 		}
 	}
 
 	private Expression rewriteArrayAccessToSubscriptGet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
 	{
-		var name = subscriptedType.getTypeDeclaration().getName();
 		var args = NodeList.nodeList(expr.getName(), expr.getIndex());
-		var invocation = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_GET, args);
-
-		if(isValidInvocation(expr, invocation))
-			return invocation;
-
-		return null;
+		return resolveOperatorInvocation(expr, Operators.SUBSCRIPT_GET, args, List.of(subscriptedType));
 	}
 
 	private Expression rewriteArrayAccessToSubscriptSet(AssignExpr expr)
@@ -386,27 +371,30 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var arrayAccessExpr = (ArrayAccessExpr)expr.getTarget();
 
 		var op = expr.getOperator();
-		var name = arrayAccessExpr.calculateResolvedType().asReferenceType().getTypeDeclaration().getName();
+		var subscriptedType = arrayAccessExpr.calculateResolvedType();
+
+		if(!subscriptedType.isReferenceType())
+			return null;
+
 		var assignedValue = expr.getValue();
 
 		// if we have a[i] @= v, rewrite to
-		// T.opSubscriptSet(a, i, T.opSubscriptGet(a, i) @ v)
+		// opSubscriptSet(a, i, opSubscriptGet(a, i) @ v)
 		if(op != AssignExpr.Operator.ASSIGN)
 		{
 			var binop = op.toBinaryOperator().orElse(null);
 			assert binop != null;
 			var arrayGetArgs = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex());
-			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_GET, arrayGetArgs);
+			var arrayGetExpr = resolveOperatorInvocation(expr, Operators.SUBSCRIPT_GET, arrayGetArgs, List.of(subscriptedType));
+
+			if(arrayGetExpr == null)
+				return null;
+
 			assignedValue = new BinaryExpr(arrayGetExpr, assignedValue, binop);
 		}
 
 		var args = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex(), assignedValue);
-		var invocation = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_SET, args);
-
-		if(isValidInvocation(expr, invocation))
-			return invocation;
-
-		return null;
+		return resolveOperatorInvocation(expr, Operators.SUBSCRIPT_SET, args, List.of(subscriptedType));
 	}
 
 	private Expression rewriteImplicitConversion(Expression expr, ResolvedType sourceType, ResolvedType targetType)
