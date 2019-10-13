@@ -411,7 +411,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 	private Expression rewriteImplicitConversion(Expression expr, ResolvedType sourceType, ResolvedType targetType)
 	{
-		var args = List.of(expr, dummyValue(targetType));
+		var args = List.of(expr);
 		var argTypes = List.of(sourceType, targetType);
 		var parent = expr.findAncestor(Expression.class).orElse(null);
 		assert parent != null;
@@ -522,35 +522,6 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			return null;
 
 		return rewriteArrayAccessToSubscriptGet(expr, leftType.asReferenceType());
-	}
-
-	private Expression dummyValue(ResolvedType type)
-	{
-		if(type.isReferenceType())
-			return new CastExpr(Types.resolvedTypeToType(type), new NullLiteralExpr());
-
-		if(type.isPrimitive())
-		{
-			var primitive = type.asPrimitive();
-
-			switch(primitive)
-			{
-			case BOOLEAN: return new BooleanLiteralExpr(false);
-			case CHAR: return new CharLiteralExpr('\0');
-
-			case BYTE: return new CastExpr(PrimitiveType.byteType(), new IntegerLiteralExpr(0));
-			case SHORT: return new CastExpr(PrimitiveType.shortType(), new IntegerLiteralExpr(0));
-			case INT: return new CastExpr(PrimitiveType.intType(), new IntegerLiteralExpr(0));
-			case LONG: return new CastExpr(PrimitiveType.longType(), new IntegerLiteralExpr(0));
-
-			case FLOAT: return new CastExpr(PrimitiveType.floatType(), new DoubleLiteralExpr(0));
-			case DOUBLE: return new CastExpr(PrimitiveType.doubleType(), new DoubleLiteralExpr(0));
-
-			default: throw new AssertionError("unknown primitive: " + primitive);
-			}
-		}
-
-		throw new AssertionError("unreachable");
 	}
 
 	@Override
