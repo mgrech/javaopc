@@ -125,7 +125,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 	private Expression rewritePreAnycrement(UnaryExpr expr, ResolvedReferenceType argType)
 	{
-		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var methodName = Operators.mapToMethodName(expr.getOperator());
 		var args = NodeList.nodeList(expr.getExpression());
 
 		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
@@ -185,7 +185,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var stmt = enclosingStmt(expr);
 		var oldExpr = hoistVar(stmt, expr.getExpression(), "old");
 
-		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var methodName = Operators.mapToMethodName(expr.getOperator());
 		var args = List.of(expr.getExpression());
 		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
 
@@ -212,7 +212,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		case PLUS:
 		case MINUS:
 		case BITWISE_COMPLEMENT:
-			var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+			var methodName = Operators.mapToMethodName(expr.getOperator());
 			var args = List.of(expr.getExpression());
 			var argTypes = List.of(argType);
 			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
@@ -283,7 +283,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			op = flip(op);
 		}
 
-		var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+		var methodName = Operators.mapToMethodName(expr.getOperator());
 		assert methodName != null;
 		var invocation = new MethodCallExpr(left, methodName, NodeList.nodeList(right));
 		return new BinaryExpr(invocation, new IntegerLiteralExpr(0), op);
@@ -318,7 +318,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		case SIGNED_RIGHT_SHIFT:
 		case UNSIGNED_RIGHT_SHIFT:
 			{
-				var methodName = OperatorNames.mapToMethodName(expr.getOperator());
+				var methodName = Operators.mapToMethodName(expr.getOperator());
 				var args = List.of(expr.getLeft(), expr.getRight());
 				var argTypes = List.of(leftType, rightType);
 				var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
@@ -360,7 +360,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			var typeName = type.asReferenceType().getTypeDeclaration().getName();
 			var allArgs = expr.getArguments();
 			allArgs.add(0, nameExpr);
-			var invocation = new MethodCallExpr(new NameExpr(typeName), OperatorNames.INVOCATION, allArgs);
+			var invocation = new MethodCallExpr(new NameExpr(typeName), Operators.INVOCATION, allArgs);
 
 			if(isValidInvocation(expr, invocation))
 				return invocation;
@@ -373,7 +373,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 	{
 		var name = subscriptedType.getTypeDeclaration().getName();
 		var args = NodeList.nodeList(expr.getName(), expr.getIndex());
-		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, args);
+		var invocation = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_GET, args);
 
 		if(isValidInvocation(expr, invocation))
 			return invocation;
@@ -396,12 +396,12 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			var binop = op.toBinaryOperator().orElse(null);
 			assert binop != null;
 			var arrayGetArgs = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex());
-			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_GET, arrayGetArgs);
+			var arrayGetExpr = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_GET, arrayGetArgs);
 			assignedValue = new BinaryExpr(arrayGetExpr, assignedValue, binop);
 		}
 
 		var args = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex(), assignedValue);
-		var invocation = new MethodCallExpr(new NameExpr(name), OperatorNames.SUBSCRIPT_SET, args);
+		var invocation = new MethodCallExpr(new NameExpr(name), Operators.SUBSCRIPT_SET, args);
 
 		if(isValidInvocation(expr, invocation))
 			return invocation;
@@ -415,7 +415,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var argTypes = List.of(sourceType, targetType);
 		var parent = expr.findAncestor(Expression.class).orElse(null);
 		assert parent != null;
-		return resolveOperatorInvocation(parent, OperatorNames.CONVERSION, args, argTypes);
+		return resolveOperatorInvocation(parent, Operators.CONVERSION, args, argTypes);
 	}
 
 	@Override
