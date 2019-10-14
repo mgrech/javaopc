@@ -28,4 +28,9 @@ public class CompileErrors
 		else
 			throw new RuntimeException(String.format(message, minExpected, maxExpected, actual, methodName, className));
 	}
+
+	public static <T> T comparableTypeShouldImplementComparable(String className, String expectedClass)
+	{
+		throw new RuntimeException(String.format("type overloads comparison for %s, but does not implement Comparable<%s>: %s", expectedClass, expectedClass, className));
+	}
 }
