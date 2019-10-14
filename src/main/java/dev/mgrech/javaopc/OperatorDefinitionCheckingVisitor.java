@@ -26,7 +26,15 @@ public class OperatorDefinitionCheckingVisitor extends VoidVisitorAdapter<Void>
 		if(paramCount < op.minArity || (op.maxArity != -1 && paramCount > op.maxArity))
 			CompileErrors.operatorMethodInvalidParamCount(className, methodName, op.minArity, op.maxArity, paramCount);
 
-		if(methodName.equals(Operators.COMPARISON))
+		if(methodName.equals("opSum"))
+		{
+			var params = decl.getParameters();
+
+			if(Types.isJavaLangString(params.get(0).resolve().getType())
+			|| Types.isJavaLangString(params.get(1).resolve().getType()))
+				CompileErrors.operandToOpSumMustNotBeString(className);
+		}
+		else if(methodName.equals(Operators.COMPARISON))
 		{
 			ResolvedType implementedType = null;
 

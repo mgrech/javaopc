@@ -33,4 +33,9 @@ public class CompileErrors
 	{
 		throw new RuntimeException(String.format("type overloads comparison for %s, but does not implement Comparable<%s>: %s", expectedClass, expectedClass, className));
 	}
+
+	public static <T> T operandToOpSumMustNotBeString(String className)
+	{
+		throw new RuntimeException(String.format("type overloads '+' and operand has disallowed parameter of type String: %s", className));
+	}
 }
