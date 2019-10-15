@@ -1,6 +1,5 @@
 package dev.mgrech.javaopc;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
@@ -13,7 +12,6 @@ import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -61,73 +59,12 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		}
 	}
 
-	private static boolean isValidInvocation(MethodCallExpr invocation)
-	{
-		assert invocation.findAncestor(CompilationUnit.class).isPresent();
-
-		try
-		{
-			invocation.resolve();
-			return true;
-		}
-		catch(RuntimeException ex)
-		{
-			return false;
-		}
-	}
-
-	private static boolean isValidInvocation(Expression location, MethodCallExpr invocation)
-	{
-		// insert for lookup (requires scope)
-		location.replace(invocation);
-
-		// lookup method
-		var valid = isValidInvocation(invocation);
-
-		// undo insertion
-		invocation.replace(location);
-
-		return valid;
-	}
-
-	private MethodCallExpr resolveOperatorInvocation(Expression expr, String opMethodName, List<Expression> args, List<ResolvedType> primaryTypes)
-	{
-		var typesDeduplicated = new HashSet<>(primaryTypes);
-		var candidates = new ArrayList<MethodCallExpr>();
-
-		for(var type : typesDeduplicated)
-		{
-			if(!type.isReferenceType())
-				continue;
-
-			var className = new NameExpr(type.asReferenceType().getTypeDeclaration().getName());
-			var invocation = new MethodCallExpr(className, opMethodName, NodeList.nodeList(args));
-
-			if(isValidInvocation(expr, invocation))
-				candidates.add(invocation);
-		}
-
-		var unqualified = new MethodCallExpr(opMethodName, args.toArray(new Expression[0]));
-
-		if(isValidInvocation(expr, unqualified))
-			candidates.add(unqualified);
-
-		switch(candidates.size())
-		{
-		case 0: return null;
-		case 1: return candidates.get(0);
-		default: break;
-		}
-
-		return CompileErrors.ambiguousMethodCall();
-	}
-
 	private Expression rewritePreAnycrement(UnaryExpr expr, ResolvedReferenceType argType)
 	{
 		var methodName = Operators.mapToMethodName(expr.getOperator());
 		var args = NodeList.nodeList(expr.getExpression());
 
-		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
+		var invocation = Lookup.resolveOverloadedOperator(expr, methodName, args, List.of(argType));
 
 		if(invocation == null)
 			return null;
@@ -186,7 +123,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 
 		var methodName = Operators.mapToMethodName(expr.getOperator());
 		var args = List.of(expr.getExpression());
-		var invocation = resolveOperatorInvocation(expr, methodName, args, List.of(argType));
+		var invocation = Lookup.resolveOverloadedOperator(expr, methodName, args, List.of(argType));
 
 		if(invocation == null)
 		{
@@ -214,7 +151,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			var methodName = Operators.mapToMethodName(expr.getOperator());
 			var args = List.of(expr.getExpression());
 			var argTypes = List.of(argType);
-			var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
+			var invocation = Lookup.resolveOverloadedOperator(expr, methodName, args, argTypes);
 
 			if(invocation == null)
 				CompileErrors.noApplicableMethodFound(methodName);
@@ -247,20 +184,6 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		}
 	}
 
-	private BinaryExpr.Operator flip(BinaryExpr.Operator op)
-	{
-		switch(op)
-		{
-		case LESS:           return BinaryExpr.Operator.GREATER;
-		case LESS_EQUALS:    return BinaryExpr.Operator.GREATER_EQUALS;
-		case GREATER:        return BinaryExpr.Operator.LESS;
-		case GREATER_EQUALS: return BinaryExpr.Operator.LESS_EQUALS;
-		default: break;
-		}
-
-		throw new AssertionError("unreachable");
-	}
-
 	private Expression rewriteComparison(BinaryExpr expr, ResolvedType leftType, ResolvedType rightType)
 	{
 		var leftComparable = Types.implementsComparable(leftType);
@@ -279,7 +202,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			var tmp = left;
 			left = right;
 			right = tmp;
-			op = flip(op);
+			op = Operators.flip(op);
 		}
 
 		var methodName = Operators.mapToMethodName(expr.getOperator());
@@ -320,7 +243,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 				var methodName = Operators.mapToMethodName(expr.getOperator());
 				var args = List.of(expr.getLeft(), expr.getRight());
 				var argTypes = List.of(leftType, rightType);
-				var invocation = resolveOperatorInvocation(expr, methodName, args, argTypes);
+				var invocation = Lookup.resolveOverloadedOperator(expr, methodName, args, argTypes);
 
 				if(invocation == null)
 					CompileErrors.noApplicableMethodFound(methodName);
@@ -356,14 +279,14 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		{
 			var args = new ArrayList<>(expr.getArguments());
 			args.add(0, nameExpr);
-			return resolveOperatorInvocation(expr, Operators.INVOCATION, args, List.of(type));
+			return Lookup.resolveOverloadedOperator(expr, Operators.INVOCATION, args, List.of(type));
 		}
 	}
 
 	private Expression rewriteArrayAccessToSubscriptGet(ArrayAccessExpr expr, ResolvedReferenceType subscriptedType)
 	{
 		var args = NodeList.nodeList(expr.getName(), expr.getIndex());
-		return resolveOperatorInvocation(expr, Operators.SUBSCRIPT_GET, args, List.of(subscriptedType));
+		return Lookup.resolveOverloadedOperator(expr, Operators.SUBSCRIPT_GET, args, List.of(subscriptedType));
 	}
 
 	private Expression rewriteArrayAccessToSubscriptSet(AssignExpr expr)
@@ -385,7 +308,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			var binop = op.toBinaryOperator().orElse(null);
 			assert binop != null;
 			var arrayGetArgs = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex());
-			var arrayGetExpr = resolveOperatorInvocation(expr, Operators.SUBSCRIPT_GET, arrayGetArgs, List.of(subscriptedType));
+			var arrayGetExpr = Lookup.resolveOverloadedOperator(expr, Operators.SUBSCRIPT_GET, arrayGetArgs, List.of(subscriptedType));
 
 			if(arrayGetExpr == null)
 				return null;
@@ -394,7 +317,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		}
 
 		var args = NodeList.nodeList(arrayAccessExpr.getName(), arrayAccessExpr.getIndex(), assignedValue);
-		return resolveOperatorInvocation(expr, Operators.SUBSCRIPT_SET, args, List.of(subscriptedType));
+		return Lookup.resolveOverloadedOperator(expr, Operators.SUBSCRIPT_SET, args, List.of(subscriptedType));
 	}
 
 	private Expression rewriteImplicitConversion(Expression expr, ResolvedType sourceType, ResolvedType targetType)
@@ -403,7 +326,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var argTypes = List.of(sourceType, targetType);
 		var parent = expr.findAncestor(Expression.class).orElse(null);
 		assert parent != null;
-		return resolveOperatorInvocation(parent, Operators.CONVERSION, args, argTypes);
+		return Lookup.resolveOverloadedOperator(parent, Operators.CONVERSION, args, argTypes);
 	}
 
 	@Override
@@ -488,7 +411,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 	public Expression visit(MethodCallExpr expr)
 	{
 		// if the invocation is already valid, it's not an overloaded invocation
-		if(isValidInvocation(expr))
+		if(Lookup.isValidInvocation(expr))
 			return null;
 
 		return rewriteMethodInvocation(expr);

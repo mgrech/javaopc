@@ -106,4 +106,18 @@ public class Operators
 		assert info != null;
 		return info.methodName;
 	}
+
+	public static BinaryExpr.Operator flip(BinaryExpr.Operator op)
+	{
+		switch(op)
+		{
+		case LESS:           return BinaryExpr.Operator.GREATER;
+		case LESS_EQUALS:    return BinaryExpr.Operator.GREATER_EQUALS;
+		case GREATER:        return BinaryExpr.Operator.LESS;
+		case GREATER_EQUALS: return BinaryExpr.Operator.LESS_EQUALS;
+		default: break;
+		}
+
+		throw new AssertionError("unreachable");
+	}
 }
