@@ -38,4 +38,9 @@ public class CompileErrors
 	{
 		throw new RuntimeException(String.format("type overloads '+' and operand has disallowed parameter of type String: %s", className));
 	}
+
+	public static <T> T allParamsBuiltIn(String className, String methodName)
+	{
+		throw new RuntimeException(String.format("overloaded operator has no parameters with user-defined type: %s in %s", methodName, className));
+	}
 }
