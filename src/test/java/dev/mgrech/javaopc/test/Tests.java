@@ -29,6 +29,12 @@ public class Tests
 	}
 
 	@Test
+	public void disambiguation()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void invocationOperatorForFunctionalInterfaceCompiles()
 	{
 		Driver.runTest();

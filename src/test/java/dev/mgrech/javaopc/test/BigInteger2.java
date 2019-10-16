@@ -41,4 +41,9 @@ public class BigInteger2
 	{
 		return new BigInteger2(l);
 	}
+
+	public static BigInteger2 opSum(BigInteger2 left, long right)
+	{
+		return new BigInteger2(left.value.add(BigInteger.valueOf(right)));
+	}
 }

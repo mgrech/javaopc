@@ -28,35 +28,15 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		var rightType = expr.getValue().calculateResolvedType();
 
 		var binaryExpr = new BinaryExpr(expr.getTarget(), expr.getValue(), binaryOp);
-		var assignExpr = new AssignExpr(expr.getTarget(), binaryExpr, AssignExpr.Operator.ASSIGN);
 
-		expr.replace(assignExpr);
+		expr.replace(binaryExpr);
 		var finalBinaryExpr = rewriteBinaryOperator(binaryExpr, leftType, rightType);
-		assignExpr.replace(expr);
+		binaryExpr.replace(expr);
 
 		if(finalBinaryExpr == null)
 			return null;
 
-		assignExpr.replace(binaryExpr, finalBinaryExpr);
-		return assignExpr;
-	}
-
-	private static ResolvedType typeof(Expression location, Expression expr)
-	{
-		location.replace(expr);
-
-		try
-		{
-			return expr.calculateResolvedType();
-		}
-		catch(RuntimeException ex)
-		{
-			return null;
-		}
-		finally
-		{
-			expr.replace(location);
-		}
+		return new AssignExpr(expr.getTarget(), finalBinaryExpr, AssignExpr.Operator.ASSIGN);
 	}
 
 	private Expression rewritePreAnycrement(UnaryExpr expr, ResolvedReferenceType argType)
@@ -258,7 +238,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 	private Expression rewriteMethodInvocation(MethodCallExpr expr)
 	{
 		var nameExpr = new NameExpr(expr.getName());
-		var type = typeof(expr, nameExpr);
+		var type = Lookup.resolveType(expr, nameExpr);
 
 		if(type == null)
 			return null;
@@ -411,7 +391,7 @@ public class OperatorVisitor implements ExprRewritingVisitor
 	public Expression visit(MethodCallExpr expr)
 	{
 		// if the invocation is already valid, it's not an overloaded invocation
-		if(Lookup.isValidInvocation(expr))
+		if(Lookup.resolveMethodInvocationInplace(expr) != null)
 			return null;
 
 		return rewriteMethodInvocation(expr);
@@ -458,9 +438,10 @@ public class OperatorVisitor implements ExprRewritingVisitor
 		for(var variable : expr.getVariables())
 		{
 			var init = variable.getInitializer().orElse(null);
+			var syntaxType = variable.getType();
 
 			// skip if the var is declared with 'var', has no initializer or is initialized with a lambda
-			if(variable.getType().isUnknownType() || init == null || init instanceof LambdaExpr)
+			if(syntaxType.isVarType() || syntaxType.isUnknownType() || init == null || init instanceof LambdaExpr)
 				continue;
 
 			var varType = variable.getType().resolve();
