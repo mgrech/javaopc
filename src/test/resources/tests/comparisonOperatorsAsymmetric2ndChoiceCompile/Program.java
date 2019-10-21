@@ -1,5 +1,3 @@
-import dev.mgrech.javaopc.test.BigInteger2;
-
 class Asymmetric implements Comparable<Integer>
 {
 	private final int i;

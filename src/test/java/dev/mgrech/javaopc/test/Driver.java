@@ -7,27 +7,26 @@ import org.junit.Assert;
 import org.mdkt.compiler.InMemoryJavaCompiler;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 public class Driver
 {
-	private static void runTest(String relativePath) throws Exception
+	private static void runTest(String testName) throws Exception
 	{
-		var input = Driver.class.getResourceAsStream(String.format("/tests/%s/Program.java.op", relativePath));
-		assert input != null : "test not found";
+		var sourceDir = new File(Driver.class.getResource("/tests").toURI()).toPath();
+		var sourceFile = sourceDir.resolve(String.format("%s/Program.java", testName));
 
-		var compilationUnit = JavaOperatorCompiler.process(Providers.provider(input), new ReflectionTypeSolver(false));
-		assert compilationUnit != null : "invalid source file";
+		var source = Files.readString(sourceFile);
+		var cu = JavaOperatorCompiler.parse(Providers.provider(source), new ReflectionTypeSolver(false));
 
-		System.out.println(compilationUnit);
-
-		var packageName = String.format("tests.%s", relativePath.replaceAll("/", "."));
-		var className = String.format("%s.Program", packageName);
-		compilationUnit.setPackageDeclaration(packageName);
+		if(cu == null)
+			throw new RuntimeException("failed to process source:\n" + source);
 
 		var compiler = InMemoryJavaCompiler.newInstance();
-		var program = compiler.compile(className, compilationUnit.toString());
+		var program = compiler.compile("Program", cu.toString());
 		var main = program.getDeclaredMethod("main", String[].class);
 
 		var oldOut = System.out;
@@ -43,7 +42,7 @@ public class Driver
 			System.setOut(oldOut);
 		}
 
-		var expectedOutput = Driver.class.getResourceAsStream(String.format("/tests/%s/expected.txt", relativePath));
+		var expectedOutput = Driver.class.getResourceAsStream(String.format("/tests/%s/expected.txt", testName));
 		var expected = new String(expectedOutput.readAllBytes(), StandardCharsets.UTF_8);
 		var actual = new String(baos.toByteArray(), StandardCharsets.UTF_8);
 		Assert.assertEquals(expected, actual);

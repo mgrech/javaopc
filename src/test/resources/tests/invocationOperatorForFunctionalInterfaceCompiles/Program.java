@@ -1,6 +1,4 @@
-import dev.mgrech.javaopc.test.BigInteger2;
-
-import java.util.function.*;
+import java.util.function.Function;
 
 public class Program
 {

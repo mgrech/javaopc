@@ -1,5 +1,3 @@
-import dev.mgrech.javaopc.test.BigInteger2;
-
 import java.math.BigInteger;
 
 public class Program
