@@ -43,7 +43,7 @@ public class OperatorDefinitionCheckingVisitor extends VoidVisitorAdapter<Void>
 				break;
 			}
 
-		if(decl.isStatic() && !anyNonBuiltin)
+		if(decl.isStatic() && !anyNonBuiltin && !methodName.equals(Operators.CONVERSION))
 			CompileErrors.allParamsBuiltIn(className, methodName);
 
 		if(methodName.equals("opSum"))

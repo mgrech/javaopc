@@ -35,6 +35,12 @@ public class Tests
 	}
 
 	@Test
+	public void implicitConversionsInBinaryOperator()
+	{
+		Driver.runTest();
+	}
+
+	@Test
 	public void invocationOperatorForFunctionalInterfaceCompiles()
 	{
 		Driver.runTest();

@@ -4,6 +4,7 @@ import com.github.javaparser.Providers;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import dev.mgrech.javaopc.JavaOperatorCompiler;
 import org.junit.Assert;
+import org.mdkt.compiler.CompilationException;
 import org.mdkt.compiler.InMemoryJavaCompiler;
 
 import java.io.ByteArrayOutputStream;
@@ -26,7 +27,18 @@ public class Driver
 			throw new RuntimeException("failed to process source:\n" + source);
 
 		var compiler = InMemoryJavaCompiler.newInstance();
-		var program = compiler.compile("Program", cu.toString());
+		Class<?> program = null;
+
+		try
+		{
+			program = compiler.compile("Program", cu.toString());
+		}
+		catch(CompilationException ex)
+		{
+			System.err.println(source);
+			throw ex;
+		}
+
 		var main = program.getDeclaredMethod("main", String[].class);
 
 		var oldOut = System.out;
