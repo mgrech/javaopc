@@ -1,9 +1,5 @@
 package dev.mgrech.javaopc;
 
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.type.ArrayType;
-import com.github.javaparser.ast.type.PrimitiveType;
-import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.resolution.types.ResolvedType;
 
 public class Types
@@ -71,29 +67,5 @@ public class Types
 				break;
 
 		return comparable;
-	}
-
-	public static Type resolvedTypeToType(ResolvedType type)
-	{
-		if(type.isPrimitive())
-		{
-			var name = type.asPrimitive().describe();
-			var primitive = PrimitiveType.Primitive.valueOf(name);
-			return new PrimitiveType(primitive);
-		}
-
-		if(type.isArray())
-		{
-			var componentType = resolvedTypeToType(type.asArrayType().getComponentType());
-			return new ArrayType(componentType);
-		}
-
-		if(type.isReference())
-		{
-			var name = type.asReferenceType().getQualifiedName();
-			return JavaParser.parseClassOrInterfaceType(name);
-		}
-
-		throw new AssertionError("unknown type: " + type);
 	}
 }

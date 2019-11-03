@@ -25,7 +25,7 @@ public class JavaOperatorCompiler
 			for(var problem : parse.getProblems())
 				System.err.println(problem);
 
-			return null;
+			throw new RuntimeException("failed to compile file");
 		}
 
 		var cu = parse.getResult().orElse(null);
