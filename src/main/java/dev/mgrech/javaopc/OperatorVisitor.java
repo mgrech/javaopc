@@ -456,9 +456,8 @@ public class OperatorVisitor implements ExprRewritingVisitor
 			if(syntaxType.isVarType() || syntaxType.isUnknownType() || init == null || init instanceof LambdaExpr)
 				continue;
 
-			var varType = variable.getType().resolve();
-			var initType = variable.getInitializer().map(Expression::calculateResolvedType).orElse(null);
-			assert initType != null;
+			var varType = syntaxType.resolve();
+			var initType = init.calculateResolvedType();
 
 			// skip if we have a 'null' initializer
 			if(initType.isNull())
